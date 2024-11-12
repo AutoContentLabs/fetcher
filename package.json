@@ -1,5 +1,5 @@
 {
-  "name": "fetcher",
+  "name": "@auto-content-labs/fetcher",
   "version": "1.0.0",
   "description": "a structure that enables data retrieval",
   "main": "src/fetch.js",
