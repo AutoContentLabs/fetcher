@@ -25,10 +25,10 @@ module.exports = async function fetcher(url, { timeout = 1000, maxRetries = 2, r
   // Function to attempt the fetch request with retries
   const tryFetch = async () => {
     const attemptStartTime = Date.now(); // Start time for this specific attempt
-
+    // Dynamically adjust the timeout for each retry attempt (multiply by 2 for each retry)
+    const currentTimeout = timeout * Math.pow(2, retries); // Increase timeout exponentially
+    
     try {
-      // Dynamically adjust the timeout for each retry attempt (multiply by 2 for each retry)
-      const currentTimeout = timeout * Math.pow(2, retries); // Increase timeout exponentially
 
       const controller = new AbortController();  // Create a new AbortController for each attempt
       const timeoutId = setTimeout(() => controller.abort(), currentTimeout);  // Set timeout based on currentTimeout
