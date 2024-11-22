@@ -11,7 +11,7 @@
  * 
  * @returns {Promise<Object|string>} - Returns a promise that resolves to the fetched data (JSON or text), or rejects with an error.
  */
-module.exports = async function fetcher(url, { timeout = 1000, maxRetries = 2, retryDelay = 200 } = {}) {
+module.exports = async function fetcher(url, { timeout = 1000, maxRetries = 2, retryDelay = 200, log = false } = {}) {
   // URL validity check before making requests
   try {
     new URL(url); // Try to create a new URL object to check validity
@@ -40,7 +40,8 @@ module.exports = async function fetcher(url, { timeout = 1000, maxRetries = 2, r
       // Calculate the time taken for this attempt
       const attemptEndTime = Date.now(); // End time for this attempt
       const attemptDuration = attemptEndTime - attemptStartTime; // Duration of the current attempt
-      console.log(`Attempt took ${attemptDuration} ms`);
+      if (log)
+        console.log(`[fetcher] Attempt took ${attemptDuration} ms`);
 
       // Handle HTTP response errors based on status code
       if (!response.ok) {
@@ -75,7 +76,8 @@ module.exports = async function fetcher(url, { timeout = 1000, maxRetries = 2, r
       // Retry logic in case of failure
       if (retries < maxRetries) {
         retries += 1;
-        console.log(`Retrying... Attempt ${retries} of ${maxRetries}`);
+        if (log)
+          console.log(`[fetcher] Retrying... Attempt ${retries} of ${maxRetries}`);
         await new Promise(resolve => setTimeout(resolve, retryDelay));  // Wait before retrying
         return tryFetch();  // Retry the fetch request
       }
@@ -103,7 +105,8 @@ module.exports = async function fetcher(url, { timeout = 1000, maxRetries = 2, r
 
   const totalEndTime = Date.now();  // End time for total request duration
   const totalDuration = totalEndTime - totalStartTime;  // Total duration for the entire fetch process
-  console.log(`Total request duration: ${totalDuration} ms`);
+  if (log)
+    console.log(`[fetcher] Total request duration: ${totalDuration} ms`);
 
   return result;
 };
