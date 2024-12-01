@@ -7,6 +7,7 @@
  */
 
 const fetcher = require('./fetcher');
+const errors = require('./errors');
 const formatURL = require('./formatURL');
 
-module.exports = { fetcher, formatURL };
+module.exports = { fetcher, formatURL, ...errors };
