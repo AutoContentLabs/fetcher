@@ -37,15 +37,15 @@ module.exports = async function fetcher(url, { timeout = 1000, maxRetries = 2, r
         const status = response.status;
         switch (status) {
           case 400:
-            throw new HttpError(400, 'Bad Request: The request was malformed or contains invalid data.');
+            throw new HttpError(400, 'Bad Request');
           case 401:
-            throw new HttpError(401, 'Unauthorized: Access is denied due to invalid credentials.');
+            throw new HttpError(401, 'Unauthorized');
           case 403:
-            throw new HttpError(403, 'Forbidden: You do not have permission to access this resource.');
+            throw new HttpError(403, 'Forbidden');
           case 404:
-            throw new HttpError(404, 'Not Found: The requested resource could not be found.');
+            throw new HttpError(404, 'Not Found');
           case 500:
-            throw new HttpError(500, 'Internal Server Error: The server encountered an unexpected condition.');
+            throw new HttpError(500, 'Internal Server Error');
           default:
             throw new HttpError(status, response.statusText);
         }
@@ -78,7 +78,7 @@ module.exports = async function fetcher(url, { timeout = 1000, maxRetries = 2, r
       if (error.message.includes('CORS')) {
         throw new CORSForbiddenError();
       } else {
-        throw new FetcherError('An unexpected error occurred: ' + error.message);
+        throw new FetcherError(error.message);
       }
     }
   };
