@@ -1,45 +1,67 @@
+class FetcherError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'FetcherError';
+  }
+}
+
+class TimeoutError extends FetcherError {
+  constructor(timeout) {
+    super(`Request timed out after ${timeout} ms`);
+    this.name = 'TimeoutError';
+  }
+}
+
+class NetworkError extends FetcherError {
+  constructor() {
+    super('Network error: Failed to fetch, DNS resolution issue, or network problem.');
+    this.name = 'NetworkError';
+  }
+}
+
+class HttpError extends FetcherError {
+  constructor(status, message) {
+    super(`HTTP Error: ${status} - ${message}`);
+    this.name = 'HttpError';
+    this.status = status;
+  }
+}
+
+class CORSForbiddenError extends FetcherError {
+  constructor() {
+    super('CORS error: Access to this resource is blocked.');
+    this.name = 'CORSForbiddenError';
+  }
+}
+
 /**
  * Fetcher: A robust HTTP request function that handles retries, timeout, and error handling.
- * This function makes an HTTP request to the provided URL with options for timeout, retries, and retry delay.
- * It will attempt to fetch the resource, retry on failure, and handle different HTTP error statuses.
- *
- * @param {string} url - The URL to fetch the resource from.
- * @param {Object} [options] - Configuration options for the fetch request.
- * @param {number} [options.timeout=1000] - The timeout in milliseconds for the request. Default is 1000 ms.
- * @param {number} [options.maxRetries=2] - The maximum number of retry attempts in case of failure. Default is 2 retries.
- * @param {number} [options.retryDelay=200] - The delay in milliseconds between retries. Default is 200 ms.
- * 
- * @returns {Promise<Object|string>} - Returns a promise that resolves to the fetched data (JSON or text), or rejects with an error.
  */
 module.exports = async function fetcher(url, { timeout = 1000, maxRetries = 2, retryDelay = 200, log = false } = {}) {
   // URL validity check before making requests
   try {
     new URL(url); // Try to create a new URL object to check validity
   } catch (error) {
-    throw new Error(`Invalid URL: ${url} - Please check the URL format.`);
+    throw new FetcherError(`Invalid URL: ${url} - Please check the URL format.`);
   }
 
-  let retries = 0;  // Counter to track the number of retries
-  const totalStartTime = Date.now(); // Start time for total request duration measurement
+  let retries = 0;
+  const totalStartTime = Date.now(); 
 
   // Function to attempt the fetch request with retries
   const tryFetch = async () => {
-    const attemptStartTime = Date.now(); // Start time for this specific attempt
-    // Dynamically adjust the timeout for each retry attempt (multiply by 2 for each retry)
-    const currentTimeout = timeout * Math.pow(2, retries); // Increase timeout exponentially
-    
+    const attemptStartTime = Date.now();
+    const currentTimeout = timeout * Math.pow(2, retries);
+
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), currentTimeout);
 
-      const controller = new AbortController();  // Create a new AbortController for each attempt
-      const timeoutId = setTimeout(() => controller.abort(), currentTimeout);  // Set timeout based on currentTimeout
-
-      // Attempt to make the fetch request with the provided URL and timeout signal
       const response = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeoutId);  // Clear the timeout if the request succeeds
+      clearTimeout(timeoutId); 
 
-      // Calculate the time taken for this attempt
-      const attemptEndTime = Date.now(); // End time for this attempt
-      const attemptDuration = attemptEndTime - attemptStartTime; // Duration of the current attempt
+      const attemptEndTime = Date.now();
+      const attemptDuration = attemptEndTime - attemptStartTime; 
       if (log)
         console.log(`[fetcher] Attempt took ${attemptDuration} ms`);
 
@@ -48,63 +70,56 @@ module.exports = async function fetcher(url, { timeout = 1000, maxRetries = 2, r
         const status = response.status;
         switch (status) {
           case 400:
-            throw new Error('400 Bad Request: The request was malformed or contains invalid data.');
+            throw new HttpError(400, 'Bad Request: The request was malformed or contains invalid data.');
           case 401:
-            throw new Error('401 Unauthorized: Access is denied due to invalid credentials.');
+            throw new HttpError(401, 'Unauthorized: Access is denied due to invalid credentials.');
           case 403:
-            throw new Error('403 Forbidden: You do not have permission to access this resource.');
+            throw new HttpError(403, 'Forbidden: You do not have permission to access this resource.');
           case 404:
-            throw new Error('404 Not Found: The requested resource could not be found.');
+            throw new HttpError(404, 'Not Found: The requested resource could not be found.');
           case 500:
-            throw new Error('500 Internal Server Error: The server encountered an unexpected condition.');
+            throw new HttpError(500, 'Internal Server Error: The server encountered an unexpected condition.');
           default:
-            throw new Error(`HTTP Error: ${status} - ${response.statusText}`);
+            throw new HttpError(status, response.statusText);
         }
       }
 
-      // Check the response content type and return appropriate data
       const contentType = response.headers.get("content-type");
       if (contentType && contentType.includes("application/json")) {
         const data = await response.json();
-        return data;  // Return JSON data if content type is JSON
+        return data; 
       } else {
         const text = await response.text();
-        return text;  // Return the response text if not JSON
+        return text;
       }
 
     } catch (error) {
-      // Retry logic in case of failure
       if (retries < maxRetries) {
         retries += 1;
         if (log)
           console.log(`[fetcher] Retrying... Attempt ${retries} of ${maxRetries}`);
-        await new Promise(resolve => setTimeout(resolve, retryDelay));  // Wait before retrying
-        return tryFetch();  // Retry the fetch request
+        await new Promise(resolve => setTimeout(resolve, retryDelay)); 
+        return tryFetch();
       }
 
-      // Handle specific error cases
       if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError') || error.message.includes('Could not resolve host')) {
-        // DNS resolution issue handling
-        throw new Error('DNS resolution failed: Could not resolve the domain, check the URL or network connection. This might be a DNS_PROBE_FINISHED_NXDOMAIN error.');
+        throw new NetworkError();
       }
       if (error.name === 'AbortError') {
-        // Timeout handling
-        throw new Error(`Request timed out after ${currentTimeout} ms`);
+        throw new TimeoutError(currentTimeout);
       }
       if (error.message.includes('CORS')) {
-        // CORS error handling
-        throw new Error('CORS error: Access to this resource is blocked');
+        throw new CORSForbiddenError();
       } else {
-        // Generic error handling
-        throw new Error('An unexpected error occurred: ' + error.message);  // Catch any other errors
+        throw new FetcherError('An unexpected error occurred: ' + error.message);
       }
     }
   };
 
-  const result = await tryFetch(); // Start the fetch attempt
+  const result = await tryFetch(); 
 
-  const totalEndTime = Date.now();  // End time for total request duration
-  const totalDuration = totalEndTime - totalStartTime;  // Total duration for the entire fetch process
+  const totalEndTime = Date.now();  
+  const totalDuration = totalEndTime - totalStartTime;
   if (log)
     console.log(`[fetcher] Total request duration: ${totalDuration} ms`);
 
